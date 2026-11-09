@@ -3,7 +3,7 @@ import { MLLP_DELIMITER } from "./constants.js";
 const START = Buffer.from([MLLP_DELIMITER.VT]);
 const END = Buffer.from([MLLP_DELIMITER.FS, MLLP_DELIMITER.CR]);
 
-export function MllpEncoder(payload) {
+export function mllpFrameEncoder(payload) {
   if (!Buffer.isBuffer(payload)) {
     throw new TypeError("encode expects a Buffer");
   }

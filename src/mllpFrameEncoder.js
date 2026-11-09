@@ -7,6 +7,11 @@ export function mllpFrameEncoder(payload) {
   if (!Buffer.isBuffer(payload)) {
     throw new TypeError("encode expects a Buffer");
   }
+
+  if (payload.length === 0) {
+    throw new RangeError("payload must not be empty");
+  }
+
   if (
     payload.includes(MLLP_DELIMITER.VT) ||
     payload.includes(MLLP_DELIMITER.FS)

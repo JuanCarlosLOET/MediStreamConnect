@@ -104,7 +104,7 @@ export class MllpFrameDecoder extends Transform {
     }
 
     this.#reset();
-    log(this.push(payload));
+    this.push(payload);
   }
 
   #reset() {

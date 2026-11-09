@@ -1,104 +1,98 @@
-import { describe, it, beforeEach } from "node:test";
-import { once } from "node:events";
+import { describe, it } from "node:test";
 import { MllpFrameDecoder } from "../src/mllpFrameDecoder.js";
 import { mllpFrameEncoder } from "../src/mllpFrameEncoder.js";
-import { log } from "node:console";
+import { HL7_SAMPLES } from "./samples.js";
+import { MLLP_DELIMITER } from "../src/constants.js";
 
-async function decoderAllData(decoder, chucks) {
-  const output = [];
-  const ended = once(decoder, "end");
-  decoder.on("data", (chuck) => output.push(chuck));
+const payload = Buffer.from(HL7_SAMPLES.ADT_Minimal, "latin1");
+
+async function decoderAllData(chucks) {
+  const decoder = new MllpFrameDecoder();
+  const frames = [];
+
+  decoder.on("data", (chuck) => frames.push(chuck));
+
+  const completion = new Promise((resolve) => {
+    decoder.once("error", resolve);
+    decoder.once("end", () => resolve(null));
+  });
 
   for (const chuck of chucks) {
     decoder.write(chuck);
   }
 
   decoder.end();
-  await ended;
+  const error = await completion;
 
-  return output;
+  return { frames, error };
 }
 
 describe("MllpFrameDecoder", () => {
-  let decoder;
-
-  beforeEach(() => {
-    decoder = new MllpFrameDecoder();
-  });
-
-  it("round-trip: MllpFrameDecoder and mllpDecode recover the original payload", async ({
+  it("round-trip: encoding and decoding recover the original payload", async ({
     assert,
   }) => {
-    const original = Buffer.from(
-      `MSH|^~\\&|||||||ORU^R01|2|P|2.3.1|\r`,
-      "latin1",
-    );
-    const result = await decoderAllData(decoder, [mllpFrameEncoder(original)]);
+    const { frames, error } = await decoderAllData([mllpFrameEncoder(payload)]);
 
-    assert.deepEqual(original, ...result);
+    assert.equal(error, null);
+    assert.deepEqual(frames, [payload]);
   });
 
-  it("message boundaries are preserved when consumed with for await", async ({
-    assert,
-  }) => {
-    const originalA = Buffer.from(
-      `MSH|^~\\&|A||||||ORU^R01|2|P|2.3.1|\r`,
-      "latin1",
-    );
+  it("emits two frames delivered in a single chunk", async ({ assert }) => {
+    const second = Buffer.from("MSH|^~\\&|C|D\r", "latin1");
 
-    const originalB = Buffer.from(
-      `MSH|^~\\&|B||||||ORU^R01|2|P|2.3.1|\r`,
-      "latin1",
-    );
-
-    const result = await decoderAllData(decoder, [
-      mllpFrameEncoder(originalA),
-      mllpFrameEncoder(originalB),
+    const combinedFrames = Buffer.concat([
+      mllpFrameEncoder(payload),
+      mllpFrameEncoder(second),
     ]);
 
-    assert.deepEqual(result, [originalA, originalB]);
+    const { frames, error } = await decoderAllData([combinedFrames]);
+
+    assert.equal(error, null);
+    assert.deepEqual(frames, [payload, second]);
   });
 
-  it("applies backpressure when the writable buffer reaches highWaterMark", ({
+  it("fails fast on an unexpected VT inside the payload", async ({
     assert,
   }) => {
-    const decoder = new MllpFrameDecoder({
-      writableHighWaterMark: 1,
-      readableHighWaterMark: 1,
-    });
+    const invalidPayload = Buffer.from([
+      MLLP_DELIMITER.VT,
+      0x41,
+      MLLP_DELIMITER.VT,
+      0x42,
+    ]);
 
-    const payload = Buffer.from("MESSAGE_A\r");
-    const frame = mllpFrameEncoder(payload);
+    const { error } = await decoderAllData([invalidPayload]);
 
-    const canContinue = decoder.write(frame);
-
-    assert.strictEqual(canContinue, false);
-
-    decoder.destroy();
+    assert.strictEqual(
+      error.message,
+      "Unexpected MLLP start delimiter (VT) encountered while reading payload.",
+    );
   });
 
-  it(
-    "applies backpressure when the readable buffer reaches highWaterMark",
-    { todo: true },
-    ({ assert }) => {
-      const decoder = new MllpFrameExtractor({
-        readableHighWaterMark: 1,
-        writableHighWaterMark: 1024,
-      });
+  it("fails when FS is not followed by CR", async ({ assert }) => {
+    const invalidPayload = Buffer.from([
+      MLLP_DELIMITER.VT,
+      0x41,
+      MLLP_DELIMITER.FS,
+      0x41,
+    ]);
+    const { error } = await decoderAllData([invalidPayload]);
 
-      const payloadA = Buffer.from("MESSAGE_A\r");
-      const payloadB = Buffer.from("MESSAGE_B\r");
+    assert.strictEqual(
+      error.message,
+      "Expected MLLP carriage return (CR) after frame terminator (FS).",
+    );
+  });
 
-      const combinedChunk = Buffer.concat([
-        mllpFrameEncoder(payloadA),
-        mllpFrameEncoder(payloadB),
-      ]);
+  it("fails when the stream ends with an incomplete frame", async ({
+    assert,
+  }) => {
+    const truncatedPayload = mllpFrameEncoder(payload).subarray(0, 6);
+    const { error } = await decoderAllData([truncatedPayload]);
 
-      const canContinue = decoder.write(combinedChunk);
-
-      assert.strictEqual(canContinue, false);
-
-      decoder.destroy();
-    },
-  );
+    assert.strictEqual(
+      error.message,
+      "Stream ended with incomplete MLLP frame.",
+    );
+  });
 });

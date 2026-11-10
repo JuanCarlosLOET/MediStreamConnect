@@ -1,6 +1,5 @@
 import { Transform } from "node:stream";
-import { MLLP_DELIMITER } from "./constants.js";
-import { log } from "node:console";
+import { DELIMITER } from "./constants.js";
 
 export const STATE = {
   AWAITING_FOR_VT: "AWAITING_FOR_VT",
@@ -24,8 +23,8 @@ export class MllpFrameDecoder extends Transform {
     this.#reset();
   }
 
-  _transform(hl7Message, encoding, callback) {
-    if (!Buffer.isBuffer(hl7Message)) {
+  _transform(chunk, encoding, callback) {
+    if (!Buffer.isBuffer(chunk)) {
       callback(
         new TypeError(
           "Expects Buffer chunks (did you call socket.setEncoding?)",
@@ -35,7 +34,7 @@ export class MllpFrameDecoder extends Transform {
     }
 
     try {
-      this.#decoderChunkInfo(hl7Message);
+      this.#decoderChunkInfo(chunk);
       callback();
     } catch (error) {
       callback(error);
@@ -59,20 +58,20 @@ export class MllpFrameDecoder extends Transform {
 
       switch (this.#state) {
         case STATE.AWAITING_FOR_VT:
-          if (currentByte === MLLP_DELIMITER.VT) {
+          if (currentByte === DELIMITER.VT) {
             this.#state = STATE.READING_PAYLOAD;
             startSegment = index + 1;
           }
           break;
 
         case STATE.READING_PAYLOAD:
-          if (currentByte === MLLP_DELIMITER.FS) {
+          if (currentByte === DELIMITER.FS) {
             if (startSegment < index) {
               this.#payloadChunks.push(chunk.subarray(startSegment, index));
             }
 
             this.#state = STATE.WAITING_FOR_CR;
-          } else if (currentByte === MLLP_DELIMITER.VT) {
+          } else if (currentByte === DELIMITER.VT) {
             throw new Error(
               "Unexpected MLLP start delimiter (VT) encountered while reading payload.",
             );
@@ -80,7 +79,7 @@ export class MllpFrameDecoder extends Transform {
           break;
 
         case STATE.WAITING_FOR_CR:
-          if (currentByte === MLLP_DELIMITER.CR) {
+          if (currentByte === DELIMITER.CR) {
             this.#emitFrame();
           } else {
             throw new Error(

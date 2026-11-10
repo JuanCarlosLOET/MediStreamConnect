@@ -1,7 +1,7 @@
-import { MLLP_DELIMITER } from "./constants.js";
+import { DELIMITER } from "./constants.js";
 
-const START = Buffer.from([MLLP_DELIMITER.VT]);
-const END = Buffer.from([MLLP_DELIMITER.FS, MLLP_DELIMITER.CR]);
+const START = Buffer.from([DELIMITER.VT]);
+const END = Buffer.from([DELIMITER.FS, DELIMITER.CR]);
 
 export function mllpFrameEncoder(payload) {
   if (!Buffer.isBuffer(payload)) {
@@ -12,10 +12,7 @@ export function mllpFrameEncoder(payload) {
     throw new RangeError("payload must not be empty");
   }
 
-  if (
-    payload.includes(MLLP_DELIMITER.VT) ||
-    payload.includes(MLLP_DELIMITER.FS)
-  ) {
+  if (payload.includes(DELIMITER.VT) || payload.includes(DELIMITER.FS)) {
     throw new RangeError(
       "payload contains VT or FS and would break the framing",
     );

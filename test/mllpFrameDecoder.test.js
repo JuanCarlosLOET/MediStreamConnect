@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import { MllpFrameDecoder } from "../src/mllpFrameDecoder.js";
 import { mllpFrameEncoder } from "../src/mllpFrameEncoder.js";
 import { HL7_SAMPLES } from "./samples.js";
-import { MLLP_DELIMITER } from "../src/constants.js";
+import { DELIMITER } from "../src/constants.js";
 
 const payload = Buffer.from(HL7_SAMPLES.ADT_Minimal, "latin1");
 
@@ -55,9 +55,9 @@ describe("MllpFrameDecoder", () => {
     assert,
   }) => {
     const invalidPayload = Buffer.from([
-      MLLP_DELIMITER.VT,
+      DELIMITER.VT,
       0x41,
-      MLLP_DELIMITER.VT,
+      DELIMITER.VT,
       0x42,
     ]);
 
@@ -71,9 +71,9 @@ describe("MllpFrameDecoder", () => {
 
   it("fails when FS is not followed by CR", async ({ assert }) => {
     const invalidPayload = Buffer.from([
-      MLLP_DELIMITER.VT,
+      DELIMITER.VT,
       0x41,
-      MLLP_DELIMITER.FS,
+      DELIMITER.FS,
       0x41,
     ]);
     const { error } = await decoderAllData([invalidPayload]);

@@ -6,24 +6,28 @@ const isAlphanumeric = (ch) =>
 const isValidDelimiter = (byte) =>
   byte >= 0x21 && byte <= 0x7e && !isAlphanumeric(byte);
 
-export function createDelimiters(delimiters) {
+export function createDelimiters(separator, delimiters) {
   if (!Buffer.isBuffer(delimiters)) {
     throw new TypeError("delimiters must be a Buffer");
   }
 
-  const [field, ...encodingCharacters] = delimiters;
+  if (typeof separator !== "number") {
+    throw new TypeError("separator must be a number");
+  }
 
-  if (encodingCharacters.length !== 4 && encodingCharacters.length !== 5) {
+  if (delimiters.length !== 4) {
     throw new RangeError(
-      `MSH-2 must have 4 or 5 characters, got ${encodingCharacters.length}.`,
+      `MSH-2 must have 4  characters, got ${encodingCharacters.length}.`,
     );
   }
 
-  if (new Set(delimiters).size !== delimiters.length) {
+  const all = Buffer.concat([Buffer.from([separator]), delimiters]);
+
+  if (new Set(all).size !== all.length) {
     throw new Error("MSH-1 and MSH-2 must not repeat a delimiter character");
   }
 
-  for (const byte of delimiters) {
+  for (const byte of all) {
     if (!isValidDelimiter(byte)) {
       throw new Error(
         `0x${byte.toString(16).padStart(2, "0")} cannot be used as an HL7 delimiter`,
@@ -31,15 +35,13 @@ export function createDelimiters(delimiters) {
     }
   }
 
-  const [component, repetition, escape, subcomponent, truncation = null] =
-    encodingCharacters;
+  const [component, repetition, escape, subcomponent] = delimiters;
 
   return {
-    field,
+    field: separator,
     component,
     repetition,
     escape,
     subcomponent,
-    truncation,
   };
 }

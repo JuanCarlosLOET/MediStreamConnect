@@ -95,4 +95,20 @@ describe("MllpFrameDecoder", () => {
       "Stream ended with incomplete MLLP frame.",
     );
   });
+
+  it("reassembles a frame fragmented across chunks", async ({ assert }) => {
+    const encoded = mllpFrameEncoder(payload);
+
+    const chunks = [
+      encoded.subarray(0, 5), // 5 bytes
+      encoded.subarray(5, 12), // 7 bytes
+      encoded.subarray(12, 23), // 11 bytes
+      encoded.subarray(23, 37), // 14 bytes
+    ];
+
+    const { frames, error } = await decoderAllData(chunks);
+
+    assert.equal(error, null);
+    assert.deepEqual(frames, [payload]);
+  });
 });
